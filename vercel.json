@@ -25,6 +25,6 @@
     }
   ],
   "env": {
-    "VIRUSTOTAL_API_KEY": "@virustotal_api_key"
+    "VIRUSTOTAL_API_KEY": "$VIRUSTOTAL_API_KEY"
   }
 }
