@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify, render_template, send_file
 import requests
 import whois
 import socket
-import dns.resolver as dns_resolver
+import dns.resolver
 import ssl
 import os
 import json
@@ -21,6 +21,124 @@ import concurrent.futures
 
 app = Flask(__name__)
 CORS(app)
+
+# База данных уязвимостей портов
+PORT_VULNERABILITIES = {
+    21: {
+        "name": "FTP",
+        "vulnerabilities": ["Слабые учетные данные", "Передача данных в открытом виде", "Анонимный доступ"],
+        "attacks": ["Брутфорс-атака", "Перехват трафика", "Несанкционированный доступ"],
+        "risk": "high"
+    },
+    22: {
+        "name": "SSH",
+        "vulnerabilities": ["Уязвимости в реализации SSH", "Слабые пароли", "Устаревшие версии"],
+        "attacks": ["Брутфорс-атака", "RCE атаки", "Перехват сессий"],
+        "risk": "medium"
+    },
+    23: {
+        "name": "Telnet",
+        "vulnerabilities": ["Полное отсутствие шифрования", "Аутентификация в открытом виде"],
+        "attacks": ["Перехват трафика", "MITM атака", "Брутфорс-атака"],
+        "risk": "critical"
+    },
+    25: {
+        "name": "SMTP",
+        "vulnerabilities": ["Неправильная конфигурация", "Ретрансляция спама"],
+        "attacks": ["Спам-рассылки", "Фишинг", "Перебор пользователей"],
+        "risk": "medium"
+    },
+    53: {
+        "name": "DNS",
+        "vulnerabilities": ["Слабая конфигурация", "Открытый резолвер"],
+        "attacks": ["DNS-спуфинг", "DDoS амплификация", "Отравление кэша"],
+        "risk": "high"
+    },
+    80: {
+        "name": "HTTP",
+        "vulnerabilities": ["Уязвимости веб-сервера", "Небезопасные приложения"],
+        "attacks": ["SQL-инъекция", "XSS", "CSRF", "Path Traversal"],
+        "risk": "medium"
+    },
+    110: {
+        "name": "POP3",
+        "vulnerabilities": ["Передача данных в открытом виде"],
+        "attacks": ["Перехват учетных данных", "Брутфорс-атака"],
+        "risk": "high"
+    },
+    135: {
+        "name": "RPC",
+        "vulnerabilities": ["Уязвимости в RPC службах"],
+        "attacks": ["Удаленное выполнение кода", "Перечисление служб"],
+        "risk": "high"
+    },
+    139: {
+        "name": "NetBIOS",
+        "vulnerabilities": ["Уязвимости SMB", "Небезопасные настройки"],
+        "attacks": ["Распространение ransomware", "RCE", "Перехват NTLM-хешей"],
+        "risk": "critical"
+    },
+    143: {
+        "name": "IMAP",
+        "vulnerabilities": ["Передача данных в открытом виде"],
+        "attacks": ["Перехват писем", "Перехват учетных данных"],
+        "risk": "high"
+    },
+    443: {
+        "name": "HTTPS",
+        "vulnerabilities": ["Устаревшие SSL/TLS", "Слабые шифры"],
+        "attacks": ["MITM атака", "Downgrade атака", "Уязвимости приложений"],
+        "risk": "medium"
+    },
+    445: {
+        "name": "SMB",
+        "vulnerabilities": ["Уязвимости реализации SMB"],
+        "attacks": ["EternalBlue", "Удаленное выполнение кода"],
+        "risk": "critical"
+    },
+    1433: {
+        "name": "MSSQL",
+        "vulnerabilities": ["Уязвимости СУБД", "Слабые пароли sa"],
+        "attacks": ["SQL-инъекция", "Брутфорс-атака"],
+        "risk": "high"
+    },
+    3306: {
+        "name": "MySQL",
+        "vulnerabilities": ["Уязвимости СУБД", "Стандартные учетные записи"],
+        "attacks": ["Брутфорс-атака", "SQL-инъекция"],
+        "risk": "high"
+    },
+    3389: {
+        "name": "RDP",
+        "vulnerabilities": ["Уязвимости реализации RDP", "Слабые пароли"],
+        "attacks": ["Брутфорс-атака", "Удаленное выполнение кода"],
+        "risk": "critical"
+    },
+    5432: {
+        "name": "PostgreSQL",
+        "vulnerabilities": ["Небезопасная конфигурация"],
+        "attacks": ["Брутфорс-атака", "Выполнение команд"],
+        "risk": "high"
+    },
+    5900: {
+        "name": "VNC",
+        "vulnerabilities": ["Слабые пароли", "Передача данных в открытом виде"],
+        "attacks": ["Брутфорс-атака", "Перехват сессий"],
+        "risk": "critical"
+    },
+    6379: {
+        "name": "Redis",
+        "vulnerabilities": ["Работа без аутентификации"],
+        "attacks": ["Запись файлов (RCE)", "Несанкционированный доступ"],
+        "risk": "critical"
+    },
+    27017: {
+        "name": "MongoDB",
+        "vulnerabilities": ["Работа без аутентификации"],
+        "attacks": ["Несанкционированный доступ", "Шифрование данных"],
+        "risk": "high"
+    }
+}
 
 # Конфигурация
 DEFAULT_VIRUSTOTAL_API_KEY = os.environ.get('VIRUSTOTAL_API_KEY', "YOUR_API_KEY")
@@ -98,20 +216,16 @@ def get_ip_info(domain):
         
         # Проверка на приватные IP
         if ip.startswith(('127.', '10.', '172.16.', '192.168.')):
-            return {"error": "Приватные IP адреса не поддерживаются"}
+            return {"info": "Приватный IP адрес"}
         
         try:
             hostname, aliases, _ = socket.gethostbyaddr(ip)
         except socket.herror:
             hostname, aliases = ip, []
         
-        # Параллельное сканирование портов и геолокации
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            ports_future = executor.submit(scan_ports, ip)
-            geo_future = executor.submit(get_geo_info, ip)
-            
-            open_ports = ports_future.result(timeout=3)
-            geolocation = geo_future.result(timeout=3)
+        # Упрощаем для Vercel (убираем параллельные запросы которые могут падать)
+        geolocation = get_geo_info(ip)
+        open_ports = scan_ports(ip, [80, 443])  # Только основные порты
         
         return {
             "ip_address": ip,
@@ -123,22 +237,61 @@ def get_ip_info(domain):
     except Exception as e:
         return {"error": f"Ошибка при получении IP информации: {str(e)}"}
 
-def scan_ports(ip, ports_to_scan=[80, 443, 21, 22, 25, 53]):
+def scan_ports(ip, ports_to_scan=None):
+    if ports_to_scan is None:
+        # Сканируем все порты из базы уязвимостей
+        ports_to_scan = list(PORT_VULNERABILITIES.keys())
+    
     open_ports = {}
+    
     for port in ports_to_scan:
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                 sock.settimeout(1)
                 result = sock.connect_ex((ip, port))
                 if result == 0:
-                    try:
-                        service = socket.getservbyport(port)
-                    except:
-                        service = "unknown"
-                    open_ports[port] = service
+                    # Порт открыт, добавляем информацию об уязвимостях
+                    port_info = PORT_VULNERABILITIES.get(port, {
+                        "name": "Unknown",
+                        "vulnerabilities": ["Неизвестная служба"],
+                        "attacks": ["Рекомендуется дальнейшее исследование"],
+                        "risk": "unknown"
+                    })
+                    
+                    open_ports[port] = {
+                        "status": "open",
+                        "service": port_info["name"],
+                        "risk_level": port_info["risk"],
+                        "vulnerabilities": port_info["vulnerabilities"],
+                        "possible_attacks": port_info["attacks"],
+                        "recommendations": generate_recommendations(port, port_info["risk"])
+                    }
         except:
             continue
+    
     return open_ports
+
+def generate_recommendations(port, risk_level):
+    recommendations = []
+    
+    if risk_level == "critical":
+        recommendations.append("НЕМЕДЛЕННО ЗАКРОЙТЕ порт или настройте строгую аутентификацию")
+        recommendations.append("Используйте VPN для доступа вместо открытого порта")
+    elif risk_level == "high":
+        recommendations.append("Рекомендуется закрыть порт или использовать брандмауэр")
+        recommendations.append("Обновите ПО до последней версии")
+    elif risk_level == "medium":
+        recommendations.append("Настройте корректную аутентификацию")
+        recommendations.append("Ограничьте доступ по IP адресам")
+    else:
+        recommendations.append("Мониторьте активность на порту")
+    
+    if port in [21, 22, 23, 110, 143, 5900]:
+        recommendations.append("Используйте SSH туннелирование или VPN")
+    if port in [3389, 5900]:
+        recommendations.append("Рассмотрите альтернативные решения для удаленного доступа")
+    
+    return recommendations
 
 def get_geo_info(ip):
     try:
@@ -369,16 +522,16 @@ def get_dns_records(domain):
         
         for record_type in record_types:
             try:
-                # ИСПРАВЬТЕ эту строку:
-                answers = dns_resolver.resolve(domain, record_type, raise_on_no_answer=False)
+                # ИСПОЛЬЗУЕМ ПРАВИЛЬНОЕ ИМЯ - dns.resolver
+                answers = dns.resolver.resolve(domain, record_type, raise_on_no_answer=False)
                 if answers.rrset:
                     records[record_type] = [str(r) for r in answers]
-            except (dns_resolver.NoAnswer, dns_resolver.NXDOMAIN, dns_resolver.NoNameservers):
+            except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.resolver.NoNameservers):
                 continue
             except Exception as e:
                 records[record_type] = f"Ошибка: {str(e)}"
                 
-        return records if records else {"error": "DNS записи не найдены"}
+        return records if records else {"info": "DNS записи не найдены"}
     except Exception as e:
         return {"error": f"Ошибка DNS: {str(e)}"}
     
@@ -458,7 +611,7 @@ def quick_scan():
     try:
         domain = extract_domain(url)
         
-        # Параллельное выполнение запросов для скорости
+        # Параллельное выполнение запросов
         with concurrent.futures.ThreadPoolExecutor() as executor:
             whois_future = executor.submit(safe_api_call, get_whois_info, domain)
             ip_future = executor.submit(safe_api_call, get_ip_info, domain)
@@ -466,6 +619,7 @@ def quick_scan():
             ssl_future = executor.submit(safe_api_call, get_ssl_info, domain)
             vt_future = executor.submit(safe_api_call, check_virustotal, domain, DEFAULT_VIRUSTOTAL_API_KEY)
             metrics_future = executor.submit(safe_api_call, get_website_metrics, url)
+            security_future = executor.submit(safe_api_call, security_scan, domain)
             
             results = {
                 'whois': whois_future.result(timeout=TIMEOUT),
@@ -473,7 +627,8 @@ def quick_scan():
                 'dns_records': dns_future.result(timeout=TIMEOUT),
                 'ssl_certificate': ssl_future.result(timeout=TIMEOUT),
                 'virustotal': vt_future.result(timeout=TIMEOUT),
-                'metrics': metrics_future.result(timeout=TIMEOUT)
+                'metrics': metrics_future.result(timeout=TIMEOUT),
+                'security_scan': security_future.result(timeout=TIMEOUT)
             }
         
         return jsonify(results)
@@ -508,7 +663,100 @@ def ip_info():
     except Exception as e:
         return jsonify({'error': f'Ошибка IP информации: {str(e)}'}), 500
 
+
+
+@app.route('/api/security_scan', methods=['GET'])
+def security_scan_route():
+    url = request.args.get('url')
+    is_valid, message = validate_url(url)
+    if not is_valid:
+        return jsonify({'error': message}), 400
+    
+    try:
+        domain = extract_domain(url)
+        return jsonify({'security_scan': safe_api_call(security_scan, domain)})
+    except Exception as e:
+        return jsonify({'error': f'Ошибка сканирования безопасности: {str(e)}'}), 500
+
+def security_scan(domain):
+    try:
+        ip = socket.gethostbyname(domain)
+        
+        # Проверка на приватные IP
+        if ip.startswith(('127.', '10.', '172.16.', '192.168.')):
+            return {"error": "Приватные IP адреса не поддерживаются для сканирования"}
+        
+        # Сканируем все опасные порты
+        open_ports = scan_ports(ip)
+        
+        # Получаем дополнительную информацию
+        geo_info = get_geo_info(ip)
+        ssl_info = get_ssl_info(domain)
+        
+        # Анализ безопасности
+        security_analysis = analyze_security(open_ports, ssl_info)
+        
+        return {
+            "target_ip": ip,
+            "target_domain": domain,
+            "open_ports": open_ports,
+            "geolocation": geo_info,
+            "ssl_security": ssl_info,
+            "security_analysis": security_analysis,
+            "scan_timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return {"error": f"Ошибка сканирования безопасности: {str(e)}"}
 @app.route('/api/virustotal', methods=['GET'])
+def analyze_security(open_ports, ssl_info):
+    analysis = {
+        "critical_issues": 0,
+        "high_issues": 0,
+        "medium_issues": 0,
+        "total_ports_open": len(open_ports),
+        "recommendations": []
+    }
+    
+    # Анализ открытых портов
+    for port, info in open_ports.items():
+        if info["risk_level"] == "critical":
+            analysis["critical_issues"] += 1
+            analysis["recommendations"].append(f"КРИТИЧЕСКИЙ: Закройте порт {port} ({info['service']})")
+        elif info["risk_level"] == "high":
+            analysis["high_issues"] += 1
+            analysis["recommendations"].append(f"ВЫСОКИЙ РИСК: Проверьте порт {port} ({info['service']})")
+        elif info["risk_level"] == "medium":
+            analysis["medium_issues"] += 1
+    
+    # Анализ SSL
+    if isinstance(ssl_info, dict) and not ssl_info.get("error"):
+        # Проверяем срок действия SSL
+        if "valid_until" in ssl_info:
+            try:
+                valid_until = datetime.strptime(ssl_info["valid_until"], "%b %d %H:%M:%S %Y GMT")
+                if valid_until < datetime.now():
+                    analysis["critical_issues"] += 1
+                    analysis["recommendations"].append("КРИТИЧЕСКИЙ: SSL сертификат просрочен")
+            except:
+                pass
+    
+    # Общая оценка безопасности
+    if analysis["critical_issues"] > 0:
+        analysis["security_level"] = "CRITICAL"
+        analysis["summary"] = "Обнаружены критические уязвимости!"
+    elif analysis["high_issues"] > 0:
+        analysis["security_level"] = "HIGH"
+        analysis["summary"] = "Высокий уровень риска"
+    elif analysis["medium_issues"] > 0:
+        analysis["security_level"] = "MEDIUM"
+        analysis["summary"] = "Средний уровень риска"
+    else:
+        analysis["security_level"] = "LOW"
+        analysis["summary"] = "Низкий уровень риска"
+    
+    return analysis
+    
 def virustotal():
     url = request.args.get('url')
     api_key = request.args.get('api_key', DEFAULT_VIRUSTOTAL_API_KEY)
