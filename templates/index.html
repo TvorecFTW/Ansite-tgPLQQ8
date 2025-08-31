@@ -209,6 +209,21 @@
             color: white;
         }
 
+        .security-scan {
+            grid-column: 1 / -1;
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+            border: none;
+        }
+
+        .security-scan i {
+            color: white;
+        }
+
+        .security-scan span {
+            color: white;
+        }
+
         .results-section {
             padding: 30px;
             background: var(--card-bg);
@@ -399,6 +414,11 @@
             <div class="action-btn quick-scan" onclick="quickScan()">
                 <i class="fas fa-bolt"></i>
                 <span>Быстрый анализ</span>
+            </div>
+            
+            <div class="action-btn security-scan" onclick="securityScan()">
+                <i class="fas fa-shield-alt"></i>
+                <span>Проверка безопасности</span>
             </div>
             
             <div class="action-btn" onclick="whois()">
@@ -632,6 +652,7 @@
 
         // Функции анализа
         function quickScan() { makeRequest('quick_scan'); }
+        function securityScan() { makeRequest('security_scan'); }
         function whois() { makeRequest('whois'); }
         function ipInfo() { makeRequest('ip_info'); }
         function virustotal() { makeRequest('virustotal'); }
