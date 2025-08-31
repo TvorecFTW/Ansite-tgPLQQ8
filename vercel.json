@@ -29,7 +29,6 @@
     }
   ],
   "env": {
-    "VIRUSTOTAL_API_KEY": "@virustotal_api_key",
     "PYTHON_VERSION": "3.9"
   }
 }
