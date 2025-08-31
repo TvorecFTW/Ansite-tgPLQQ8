@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify, render_template, send_file
 import requests
 import whois
 import socket
-import dns.resolver
+import dns.resolver as dns_resolver
 import ssl
 import os
 import json
@@ -423,11 +423,11 @@ def get_dns_records(domain):
         
         for record_type in record_types:
             try:
-                # ИСПОЛЬЗУЕМ ПРАВИЛЬНОЕ ИМЯ - dns.resolver
-                answers = dns.resolver.resolve(domain, record_type, raise_on_no_answer=False)
+                # ИСПОЛЬЗУЕМ dns_resolver вместо dns.resolver
+                answers = dns_resolver.resolve(domain, record_type, raise_on_no_answer=False)
                 if answers.rrset:
                     records[record_type] = [str(r) for r in answers]
-            except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.resolver.NoNameservers):
+            except (dns_resolver.NoAnswer, dns_resolver.NXDOMAIN, dns_resolver.NoNameservers):
                 continue
             except Exception as e:
                 records[record_type] = f"Ошибка: {str(e)}"
@@ -435,7 +435,7 @@ def get_dns_records(domain):
         return records if records else {"info": "DNS записи не найдены"}
     except Exception as e:
         return {"error": f"Ошибка DNS: {str(e)}"}
-
+        
 def get_ip_neighbors(domain):
     try:
         ip = socket.gethostbyname(domain)
