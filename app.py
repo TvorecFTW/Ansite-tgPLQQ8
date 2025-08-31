@@ -651,5 +651,12 @@ def export_report():
 def health_check():
     return jsonify({'status': 'ok', 'timestamp': datetime.now().isoformat()})
 
+# Добавьте в конец app.py перед запуском
 if __name__ == '__main__':
+    # Для Vercel timeout configuration
+    from flask import Flask
+    app.config['JSONIFY_PRETTYPRINT_REGULAR'] = True
+    app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+    
+    # Для локальной разработки
     app.run(debug=True)
