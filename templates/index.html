@@ -103,7 +103,7 @@
             display: flex;
             gap: 15px;
             align-items: center;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
 
         .url-input {
@@ -133,6 +133,24 @@
 
         .paste-btn:hover {
             background: #475569;
+        }
+
+        .api-key-section {
+            background: var(--light);
+            padding: 15px;
+            border-radius: 12px;
+            margin-top: 10px;
+            border: 1px solid var(--border);
+        }
+
+        .api-key-section h3 {
+            color: var(--dark);
+            margin-bottom: 10px;
+            font-size: 1em;
+        }
+
+        .dark-mode .api-key-section {
+            background: #0f172a;
         }
 
         .actions-grid {
@@ -198,7 +216,7 @@
 
         .results-header {
             display: flex;
-            justify-content: between;
+            justify-content: space-between;
             align-items: center;
             margin-bottom: 20px;
         }
@@ -335,6 +353,12 @@
             .url-input {
                 width: 100%;
             }
+
+            .results-header {
+                flex-direction: column;
+                gap: 15px;
+                align-items: flex-start;
+            }
         }
     </style>
 </head>
@@ -352,8 +376,22 @@
             <div class="input-group">
                 <input type="url" class="url-input" id="url" placeholder="https://example.com" required>
                 <button class="paste-btn" onclick="pasteFromClipboard()">
-                    <i class="fas fa-paste"></i> Вставить
+                    <i class="fas fa-paste"></i> Вставить URL
                 </button>
+            </div>
+
+            <div class="api-key-section">
+                <h3><i class="fas fa-key"></i> VirusTotal API ключ (для проверки безопасности)</h3>
+                <div class="input-group">
+                    <input type="text" class="url-input" id="vtApiKey" 
+                           placeholder="Введите ваш VirusTotal API ключ (опционально)">
+                    <button class="paste-btn" onclick="pasteApiKeyFromClipboard()">
+                        <i class="fas fa-paste"></i> Вставить ключ
+                    </button>
+                </div>
+                <p style="font-size: 12px; color: var(--secondary); margin-top: 5px;">
+                    Получите бесплатный ключ на <a href="https://www.virustotal.com/" target="_blank" style="color: var(--primary);">virustotal.com</a>
+                </p>
             </div>
         </div>
 
@@ -482,6 +520,14 @@
             });
         }
 
+        function pasteApiKeyFromClipboard() {
+            navigator.clipboard.readText().then(text => {
+                document.getElementById('vtApiKey').value = text;
+            }).catch(err => {
+                alert('Не удалось получить ключ из буфера обмена');
+            });
+        }
+
         function updateStats(data) {
             const statsContainer = document.getElementById('stats');
             statsContainer.innerHTML = '';
@@ -513,11 +559,18 @@
             
             try {
                 const url = document.getElementById('url').value;
+                const vtApiKey = document.getElementById('vtApiKey').value;
+                
                 if (!url) {
                     throw new Error('Введите URL сайта');
                 }
 
-                const response = await fetch(`/api/${endpoint}?url=${encodeURIComponent(url)}`);
+                let apiUrl = `/api/${endpoint}?url=${encodeURIComponent(url)}`;
+                if (vtApiKey) {
+                    apiUrl += `&api_key=${encodeURIComponent(vtApiKey)}`;
+                }
+                
+                const response = await fetch(apiUrl);
                 const data = await response.json();
                 
                 if (!response.ok) {
@@ -526,7 +579,12 @@
 
                 currentResults = data;
                 displayResults(data);
-                updateStats(data);
+                
+                // Обновляем статистику только для quick_scan
+                if (endpoint === 'quick_scan') {
+                    updateStats(data);
+                }
+                
                 setStatus('Анализ завершен');
                 
             } catch (error) {
@@ -562,7 +620,14 @@
             }
 
             const url = document.getElementById('url').value;
-            window.open(`/api/export?url=${encodeURIComponent(url)}&format=${format}`, '_blank');
+            const vtApiKey = document.getElementById('vtApiKey').value;
+            
+            let exportUrl = `/api/export?url=${encodeURIComponent(url)}&format=${format}`;
+            if (vtApiKey) {
+                exportUrl += `&api_key=${encodeURIComponent(vtApiKey)}`;
+            }
+            
+            window.open(exportUrl, '_blank');
         }
 
         // Функции анализа
@@ -588,6 +653,17 @@
             
             // Автофокус на поле ввода
             document.getElementById('url').focus();
+            
+            // Попробуем загрузить сохраненный API ключ
+            const savedApiKey = localStorage.getItem('vt_api_key');
+            if (savedApiKey) {
+                document.getElementById('vtApiKey').value = savedApiKey;
+            }
+            
+            // Сохраняем API ключ при изменении
+            document.getElementById('vtApiKey').addEventListener('change', function() {
+                localStorage.setItem('vt_api_key', this.value);
+            });
         });
     </script>
 </body>
