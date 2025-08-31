@@ -423,6 +423,7 @@ def get_dns_records(domain):
         
         for record_type in record_types:
             try:
+                # ИСПОЛЬЗУЕМ ПРАВИЛЬНОЕ ИМЯ - dns.resolver
                 answers = dns.resolver.resolve(domain, record_type, raise_on_no_answer=False)
                 if answers.rrset:
                     records[record_type] = [str(r) for r in answers]
@@ -497,12 +498,17 @@ def security_scan(domain):
         if ip.startswith(('127.', '10.', '172.16.', '192.168.')):
             return {"error": "Приватные IP адреса не поддерживаются для сканирования"}
         
-        # Сканируем все опасные порты
-        open_ports = scan_ports(ip)
-        
-        # Получаем дополнительную информацию
-        geo_info = get_geo_info(ip)
-        ssl_info = get_ssl_info(domain)
+        # Параллельное выполнение запросов
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            ports_future = executor.submit(scan_ports, ip)
+            geo_future = executor.submit(get_geo_info, ip)
+            ssl_future = executor.submit(get_ssl_info, domain)
+            vt_future = executor.submit(safe_api_call, check_virustotal, domain, DEFAULT_VIRUSTOTAL_API_KEY)
+            
+            open_ports = ports_future.result(timeout=TIMEOUT)
+            geo_info = geo_future.result(timeout=TIMEOUT)
+            ssl_info = ssl_future.result(timeout=TIMEOUT)
+            vt_info = vt_future.result(timeout=TIMEOUT)
         
         # Анализ безопасности
         security_analysis = analyze_security(open_ports, ssl_info)
@@ -513,6 +519,7 @@ def security_scan(domain):
             "open_ports": open_ports,
             "geolocation": geo_info,
             "ssl_security": ssl_info,
+            "virustotal": vt_info,  # Добавили VirusTotal
             "security_analysis": security_analysis,
             "scan_timestamp": datetime.now().isoformat()
         }
@@ -598,7 +605,7 @@ def quick_scan():
             ssl_future = executor.submit(safe_api_call, get_ssl_info, domain)
             vt_future = executor.submit(safe_api_call, check_virustotal, domain, DEFAULT_VIRUSTOTAL_API_KEY)
             metrics_future = executor.submit(safe_api_call, get_website_metrics, url)
-            security_future = executor.submit(safe_api_call, security_scan, domain)
+            # УБРАЛИ security_future - чтобы не дублировать
             
             results = {
                 'whois': whois_future.result(timeout=TIMEOUT),
@@ -606,8 +613,8 @@ def quick_scan():
                 'dns_records': dns_future.result(timeout=TIMEOUT),
                 'ssl_certificate': ssl_future.result(timeout=TIMEOUT),
                 'virustotal': vt_future.result(timeout=TIMEOUT),
-                'metrics': metrics_future.result(timeout=TIMEOUT),
-                'security_scan': security_future.result(timeout=TIMEOUT)
+                'metrics': metrics_future.result(timeout=TIMEOUT)
+                # УБРАЛИ security_scan
             }
         
         return jsonify(results)
