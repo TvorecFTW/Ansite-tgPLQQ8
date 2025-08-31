@@ -6,21 +6,17 @@
       "use": "@vercel/python"
     },
     {
-      "src": "templates/index.html",
+      "src": "templates/**/*",
       "use": "@vercel/static"
     }
   ],
   "routes": [
     {
-      "src": "/",
-      "dest": "/app.py"
-    },
-    {
       "src": "/api/(.*)",
       "dest": "/app.py"
     },
     {
-      "src": "/(.*\\.html)",
+      "src": "/static/(.*)",
       "dest": "/templates/$1"
     },
     {
@@ -29,12 +25,6 @@
     }
   ],
   "env": {
-    "VIRUSTOTAL_API_KEY": "@virustotal_api_key",
-    "PYTHON_VERSION": "3.9"
-  },
-  "functions": {
-    "app.py": {
-      "maxDuration": 10
-    }
+    "VIRUSTOTAL_API_KEY": "@virustotal_api_key"
   }
 }
