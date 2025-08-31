@@ -12,6 +12,7 @@
             --success: #10b981;
             --danger: #ef4444;
             --warning: #f59e0b;
+            --info: #3b82f6;
             --dark: #1e293b;
             --light: #f8fafc;
             --card-bg: #ffffff;
@@ -24,6 +25,7 @@
             --success: #22c55e;
             --danger: #f87171;
             --warning: #fbbf24;
+            --info: #60a5fa;
             --dark: #f8fafc;
             --light: #0f172a;
             --card-bg: #1e293b;
@@ -267,7 +269,7 @@
             min-height: 300px;
             max-height: 500px;
             overflow-y: auto;
-            font-family: 'Courier New', monospace;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             font-size: 14px;
             line-height: 1.5;
         }
@@ -356,6 +358,132 @@
             color: var(--primary);
         }
 
+        /* Стили для красивого отображения результатов */
+        .result-item {
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+        }
+
+        .result-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .result-header i {
+            font-size: 1.5em;
+            color: var(--primary);
+        }
+
+        .result-header h3 {
+            color: var(--dark);
+            font-size: 1.2em;
+        }
+
+        .result-content {
+            padding: 10px;
+        }
+
+        .result-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .result-row:last-child {
+            border-bottom: none;
+        }
+
+        .result-key {
+            font-weight: 600;
+            color: var(--dark);
+            min-width: 150px;
+        }
+
+        .result-value {
+            color: var(--secondary);
+            text-align: right;
+            flex: 1;
+        }
+
+        .risk-critical {
+            color: #ef4444;
+            font-weight: bold;
+        }
+
+        .risk-high {
+            color: #f59e0b;
+            font-weight: bold;
+        }
+
+        .risk-medium {
+            color: #3b82f6;
+            font-weight: bold;
+        }
+
+        .risk-low {
+            color: #10b981;
+            font-weight: bold;
+        }
+
+        .port-item {
+            margin-bottom: 15px;
+            padding: 12px;
+            border-radius: 6px;
+            background: var(--light);
+            border-left: 4px solid var(--primary);
+        }
+
+        .port-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .port-service {
+            font-weight: bold;
+            color: var(--dark);
+        }
+
+        .port-risk {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+
+        .vuln-list {
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+
+        .vuln-list li {
+            margin: 4px 0;
+            color: var(--secondary);
+        }
+
+        .recommendations {
+            margin-top: 10px;
+            padding: 10px;
+            background: var(--info);
+            color: white;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+
+        .recommendations strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+
         @media (max-width: 768px) {
             .actions-grid {
                 grid-template-columns: 1fr;
@@ -373,6 +501,19 @@
                 flex-direction: column;
                 gap: 15px;
                 align-items: flex-start;
+            }
+
+            .result-row {
+                flex-direction: column;
+                gap: 5px;
+            }
+
+            .result-key {
+                min-width: auto;
+            }
+
+            .result-value {
+                text-align: left;
             }
         }
     </style>
@@ -573,6 +714,437 @@
             }
         }
 
+        function formatResult(data) {
+            let html = '';
+            
+            // WHOIS информация
+            if (data.whois) {
+                html += formatWhois(data.whois);
+            }
+            
+            // IP информация
+            if (data.ip_info) {
+                html += formatIpInfo(data.ip_info);
+            }
+            
+            // DNS записи
+            if (data.dns_records) {
+                html += formatDnsRecords(data.dns_records);
+            }
+            
+            // SSL сертификат
+            if (data.ssl_certificate) {
+                html += formatSslInfo(data.ssl_certificate);
+            }
+            
+            // VirusTotal
+            if (data.virustotal) {
+                html += formatVirusTotal(data.virustotal);
+            }
+            
+            // Метрики сайта
+            if (data.metrics) {
+                html += formatMetrics(data.metrics);
+            }
+            
+            // Security Scan
+            if (data.security_scan) {
+                html += formatSecurityScan(data.security_scan);
+            }
+            
+            return html || '<div class="result-item"><p>Нет данных для отображения</p></div>';
+        }
+
+        function formatWhois(whoisData) {
+            if (whoisData.error) {
+                return `
+                    <div class="result-item">
+                        <div class="result-header">
+                            <i class="fas fa-globe"></i>
+                            <h3>WHOIS информация</h3>
+                        </div>
+                        <div class="result-content">
+                            <p style="color: var(--danger);">${whoisData.error}</p>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            let html = `
+                <div class="result-item">
+                    <div class="result-header">
+                        <i class="fas fa-globe"></i>
+                        <h3>WHOIS информация</h3>
+                    </div>
+                    <div class="result-content">
+            `;
+            
+            for (const [key, value] of Object.entries(whoisData)) {
+                html += `
+                    <div class="result-row">
+                        <span class="result-key">${key.replace(/_/g, ' ')}:</span>
+                        <span class="result-value">${value}</span>
+                    </div>
+                `;
+            }
+            
+            html += '</div></div>';
+            return html;
+        }
+
+        function formatIpInfo(ipData) {
+            if (ipData.error) {
+                return `
+                    <div class="result-item">
+                        <div class="result-header">
+                            <i class="fas fa-server"></i>
+                            <h3>IP информация</h3>
+                        </div>
+                        <div class="result-content">
+                            <p style="color: var(--danger);">${ipData.error}</p>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            let html = `
+                <div class="result-item">
+                    <div class="result-header">
+                        <i class="fas fa-server"></i>
+                        <h3>IP информация</h3>
+                    </div>
+                    <div class="result-content">
+                        <div class="result-row">
+                            <span class="result-key">IP адрес:</span>
+                            <span class="result-value">${ipData.ip_address || 'N/A'}</span>
+                        </div>
+                        <div class="result-row">
+                            <span class="result-key">Хостнейм:</span>
+                            <span class="result-value">${ipData.hostname || 'N/A'}</span>
+                        </div>
+            `;
+            
+            if (ipData.geolocation && !ipData.geolocation.error) {
+                const geo = ipData.geolocation;
+                html += `
+                    <div class="result-row">
+                        <span class="result-key">Страна:</span>
+                        <span class="result-value">${geo.country || 'N/A'}</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-key">Город:</span>
+                        <span class="result-value">${geo.city || 'N/A'}</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-key">Провайдер:</span>
+                        <span class="result-value">${geo.isp || 'N/A'}</span>
+                    </div>
+                `;
+            }
+            
+            if (ipData.open_ports && Object.keys(ipData.open_ports).length > 0) {
+                html += `
+                    <div class="result-row">
+                        <span class="result-key">Открытые порты:</span>
+                        <span class="result-value">${Object.keys(ipData.open_ports).join(', ')}</span>
+                    </div>
+                `;
+            }
+            
+            html += '</div></div>';
+            return html;
+        }
+
+        function formatDnsRecords(dnsData) {
+            if (dnsData.error) {
+                return `
+                    <div class="result-item">
+                        <div class="result-header">
+                            <i class="fas fa-network-wired"></i>
+                            <h3>DNS записи</h3>
+                        </div>
+                        <div class="result-content">
+                            <p style="color: var(--danger);">${dnsData.error}</p>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            if (dnsData.info) {
+                return `
+                    <div class="result-item">
+                        <div class="result-header">
+                            <i class="fas fa-network-wired"></i>
+                            <h3>DNS записи</h3>
+                        </div>
+                        <div class="result-content">
+                            <p>${dnsData.info}</p>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            let html = `
+                <div class="result-item">
+                    <div class="result-header">
+                        <i class="fas fa-network-wired"></i>
+                        <h3>DNS записи</h3>
+                    </div>
+                    <div class="result-content">
+            `;
+            
+            for (const [recordType, records] of Object.entries(dnsData)) {
+                if (Array.isArray(records)) {
+                    html += `
+                        <div class="result-row">
+                            <span class="result-key">${recordType}:</span>
+                            <span class="result-value">${records.join(', ')}</span>
+                        </div>
+                    `;
+                }
+            }
+            
+            html += '</div></div>';
+            return html;
+        }
+
+        function formatSslInfo(sslData) {
+            if (sslData.error) {
+                return `
+                    <div class="result-item">
+                        <div class="result-header">
+                            <i class="fas fa-lock"></i>
+                            <h3>SSL сертификат</h3>
+                        </div>
+                        <div class="result-content">
+                            <p style="color: var(--danger);">${sslData.error}</p>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            let html = `
+                <div class="result-item">
+                    <div class="result-header">
+                        <i class="fas fa-lock"></i>
+                        <h3>SSL сертификат</h3>
+                    </div>
+                    <div class="result-content">
+                        <div class="result-row">
+                            <span class="result-key">Действителен до:</span>
+                            <span class="result-value">${sslData.valid_until || 'N/A'}</span>
+                        </div>
+                        <div class="result-row">
+                            <span class="result-key">Издатель:</span>
+                            <span class="result-value">${sslData.issuer?.organizationName || sslData.issuer?.commonName || 'N/A'}</span>
+                        </div>
+                        <div class="result-row">
+                            <span class="result-key">Владелец:</span>
+                            <span class="result-value">${sslData.subject?.commonName || 'N/A'}</span>
+                        </div>
+            `;
+            
+            if (sslData.san && sslData.san.length > 0) {
+                html += `
+                    <div class="result-row">
+                        <span class="result-key">Alternative Names:</span>
+                        <span class="result-value">${sslData.san.join(', ')}</span>
+                    </div>
+                `;
+            }
+            
+            html += '</div></div>';
+            return html;
+        }
+
+        function formatVirusTotal(vtData) {
+            if (vtData.error || vtData.warning) {
+                const message = vtData.error || vtData.warning;
+                return `
+                    <div class="result-item">
+                        <div class="result-header">
+                            <i class="fas fa-shield-alt"></i>
+                            <h3>VirusTotal</h3>
+                        </div>
+                        <div class="result-content">
+                            <p>${message}</p>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            let html = `
+                <div class="result-item">
+                    <div class="result-header">
+                        <i class="fas fa-shield-alt"></i>
+                        <h3>VirusTotal</h3>
+                    </div>
+                    <div class="result-content">
+                        <div class="result-row">
+                            <span class="result-key">Репутация:</span>
+                            <span class="result-value">${vtData.reputation || 'N/A'}</span>
+                        </div>
+            `;
+            
+            if (vtData.stats) {
+                html += `
+                    <div class="result-row">
+                        <span class="result-key">Безвредные:</span>
+                        <span class="result-value">${vtData.stats.harmless || 0}</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-key">Вредоносные:</span>
+                        <span class="result-value">${vtData.stats.malicious || 0}</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-key">Подозрительные:</span>
+                        <span class="result-value">${vtData.stats.suspicious || 0}</span>
+                    </div>
+                `;
+            }
+            
+            html += '</div></div>';
+            return html;
+        }
+
+        function formatMetrics(metricsData) {
+            if (metricsData.error) {
+                return `
+                    <div class="result-item">
+                        <div class="result-header">
+                            <i class="fas fa-chart-line"></i>
+                            <h3>Метрики сайта</h3>
+                        </div>
+                        <div class="result-content">
+                            <p style="color: var(--danger);">${metricsData.error}</p>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            return `
+                <div class="result-item">
+                    <div class="result-header">
+                        <i class="fas fa-chart-line"></i>
+                        <h3>Метрики сайта</h3>
+                    </div>
+                    <div class="result-content">
+                        <div class="result-row">
+                            <span class="result-key">Время загрузки:</span>
+                            <span class="result-value">${metricsData.load_time || 'N/A'}</span>
+                        </div>
+                        <div class="result-row">
+                            <span class="result-key">Количество слов:</span>
+                            <span class="result-value">${metricsData.word_count || 'N/A'}</span>
+                        </div>
+                        <div class="result-row">
+                            <span class="result-key">Количество символов:</span>
+                            <span class="result-value">${metricsData.char_count || 'N/A'}</span>
+                        </div>
+                        <div class="result-row">
+                            <span class="result-key">Размер страницы:</span>
+                            <span class="result-value">${metricsData.page_size || 'N/A'}</span>
+                        </div>
+                        <div class="result-row">
+                            <span class="result-key">Кодировка:</span>
+                            <span class="result-value">${metricsData.encoding || 'N/A'}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function formatSecurityScan(securityData) {
+            if (securityData.error) {
+                return `
+                    <div class="result-item">
+                        <div class="result-header">
+                            <i class="fas fa-shield-alt"></i>
+                            <h3>Проверка безопасности</h3>
+                        </div>
+                        <div class="result-content">
+                            <p style="color: var(--danger);">${securityData.error}</p>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            let html = `
+                <div class="result-item">
+                    <div class="result-header">
+                        <i class="fas fa-shield-alt"></i>
+                        <h3>Проверка безопасности</h3>
+                    </div>
+                    <div class="result-content">
+                        <div class="result-row">
+                            <span class="result-key">Целевой IP:</span>
+                            <span class="result-value">${securityData.target_ip || 'N/A'}</span>
+                        </div>
+                        <div class="result-row">
+                            <span class="result-key">Домен:</span>
+                            <span class="result-value">${securityData.target_domain || 'N/A'}</span>
+                        </div>
+            `;
+            
+            if (securityData.security_analysis) {
+                const analysis = securityData.security_analysis;
+                const riskClass = `risk-${analysis.security_level?.toLowerCase() || 'medium'}`;
+                
+                html += `
+                    <div class="result-row">
+                        <span class="result-key">Уровень безопасности:</span>
+                        <span class="result-value ${riskClass}">${analysis.security_level || 'N/A'} - ${analysis.summary || ''}</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-key">Критические проблемы:</span>
+                        <span class="result-value">${analysis.critical_issues || 0}</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-key">Высокие риски:</span>
+                        <span class="result-value">${analysis.high_issues || 0}</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-key">Открытых портов:</span>
+                        <span class="result-value">${analysis.total_ports_open || 0}</span>
+                    </div>
+                `;
+            }
+            
+            if (securityData.open_ports && Object.keys(securityData.open_ports).length > 0) {
+                html += `
+                    <div class="result-row">
+                        <span class="result-key">Открытые порты:</span>
+                        <span class="result-value"></span>
+                    </div>
+                `;
+                
+                for (const [port, info] of Object.entries(securityData.open_ports)) {
+                    const riskClass = `risk-${info.risk_level || 'medium'}`;
+                    html += `
+                        <div class="port-item">
+                            <div class="port-header">
+                                <span class="port-service">Порт ${port}: ${info.service}</span>
+                                <span class="port-risk ${riskClass}">${info.risk_level?.toUpperCase() || 'UNKNOWN'}</span>
+                            </div>
+                            <div>
+                                <strong>Уязвимости:</strong>
+                                <ul class="vuln-list">
+                                    ${info.vulnerabilities?.map(vuln => `<li>${vuln}</li>`).join('') || '<li>Не обнаружено</li>'}
+                                </ul>
+                            </div>
+                            <div class="recommendations">
+                                <strong>Рекомендации:</strong>
+                                ${info.recommendations?.map(rec => `<div>• ${rec}</div>`).join('') || '<div>Специфические рекомендации отсутствуют</div>'}
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+            
+            html += '</div></div>';
+            return html;
+        }
+
         async function makeRequest(endpoint, params = {}) {
             showLoading();
             setStatus('Выполняется запрос...');
@@ -598,7 +1170,10 @@
                 }
 
                 currentResults = data;
-                displayResults(data);
+                
+                // Форматируем результаты для красивого отображения
+                const resultDiv = document.getElementById('result');
+                resultDiv.innerHTML = formatResult(data);
                 
                 // Обновляем статистику только для quick_scan
                 if (endpoint === 'quick_scan') {
@@ -609,28 +1184,22 @@
                 
             } catch (error) {
                 setStatus('Ошибка');
-                displayResults({ error: error.message });
+                const resultDiv = document.getElementById('result');
+                resultDiv.innerHTML = `
+                    <div class="result-item">
+                        <div class="result-header">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <h3>Ошибка</h3>
+                        </div>
+                        <div class="result-content">
+                            <p style="color: var(--danger);">${error.message}</p>
+                        </div>
+                    </div>
+                `;
             } finally {
                 hideLoading();
                 updateTimestamp();
             }
-        }
-
-        function displayResults(data) {
-            const resultDiv = document.getElementById('result');
-            resultDiv.innerHTML = '';
-
-            if (data.error) {
-                resultDiv.innerHTML = `<div style="color: var(--danger); padding: 20px; text-align: center;">
-                    <i class="fas fa-exclamation-triangle" style="font-size: 3em; margin-bottom: 10px;"></i>
-                    <h3>Ошибка</h3>
-                    <p>${data.error}</p>
-                </div>`;
-                return;
-            }
-
-            const formatted = JSON.stringify(data, null, 2);
-            resultDiv.textContent = formatted;
         }
 
         function exportReport(format) {
