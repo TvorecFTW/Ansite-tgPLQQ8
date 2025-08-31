@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify, render_template, send_file
 import requests
 import whois
 import socket
-import dns.resolver
+import dns.resolver as dns_resolver
 import ssl
 import os
 import json
@@ -142,6 +142,10 @@ def scan_ports(ip, ports_to_scan=[80, 443, 21, 22, 25, 53]):
 
 def get_geo_info(ip):
     try:
+        # Проверяем на приватные IP
+        if ip.startswith(('127.', '10.', '172.16.', '192.168.')):
+            return {"error": "Приватный IP адрес"}
+            
         response = requests.get(f"http://ip-api.com/json/{ip}", timeout=3)
         data = response.json()
         if data['status'] == 'success':
@@ -170,13 +174,23 @@ def get_whois_info(domain):
                 if isinstance(value, list):
                     value = ', '.join(str(v) for v in value if v)
                 result[key] = str(value)
+        
+        # Если результат пустой, возвращаем ошибку
+        if not result:
+            return {"error": "WHOIS информация недоступна для этого домена"}
+            
         return result
     except Exception as e:
         return {"error": f"Ошибка WHOIS: {str(e)}"}
 
-def check_virustotal(domain, api_key):
+def check_virustotal(domain, api_key=None):
+    # Если API ключ не передан, используем дефолтный
+    if not api_key:
+        api_key = DEFAULT_VIRUSTOTAL_API_KEY
+        
     if not api_key or api_key == "YOUR_API_KEY":
         return {"error": "Необходимо указать API ключ VirusTotal"}
+    
     try:
         url = f"https://www.virustotal.com/api/v3/domains/{domain}"
         headers = {"x-apikey": api_key}
@@ -355,10 +369,11 @@ def get_dns_records(domain):
         
         for record_type in record_types:
             try:
-                answers = dns.resolver.resolve(domain, record_type, raise_on_no_answer=False)
+                # ИСПРАВЬТЕ эту строку:
+                answers = dns_resolver.resolve(domain, record_type, raise_on_no_answer=False)
                 if answers.rrset:
                     records[record_type] = [str(r) for r in answers]
-            except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.resolver.NoNameservers):
+            except (dns_resolver.NoAnswer, dns_resolver.NXDOMAIN, dns_resolver.NoNameservers):
                 continue
             except Exception as e:
                 records[record_type] = f"Ошибка: {str(e)}"
@@ -366,7 +381,7 @@ def get_dns_records(domain):
         return records if records else {"error": "DNS записи не найдены"}
     except Exception as e:
         return {"error": f"Ошибка DNS: {str(e)}"}
-
+    
 def get_ip_neighbors(domain):
     try:
         ip = socket.gethostbyname(domain)
@@ -496,13 +511,15 @@ def ip_info():
 @app.route('/api/virustotal', methods=['GET'])
 def virustotal():
     url = request.args.get('url')
+    api_key = request.args.get('api_key', DEFAULT_VIRUSTOTAL_API_KEY)
+    
     is_valid, message = validate_url(url)
     if not is_valid:
         return jsonify({'error': message}), 400
     
     try:
         domain = extract_domain(url)
-        return jsonify({'virustotal': safe_api_call(check_virustotal, domain, DEFAULT_VIRUSTOTAL_API_KEY)})
+        return jsonify({'virustotal': safe_api_call(check_virustotal, domain, api_key)})
     except Exception as e:
         return jsonify({'error': f'Ошибка VirusTotal: {str(e)}'}), 500
 
