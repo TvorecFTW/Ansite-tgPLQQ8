@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify, render_template, send_file
 import requests
 import whois
 import socket
-import dns.resolver as dns_resolver
+import dns.resolver
 import ssl
 import os
 import json
@@ -31,182 +31,403 @@ HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
 }
 
-# База данных уязвимостей портов
+# Расширенная база данных уязвимостей портов
 PORT_VULNERABILITIES = {
-    21: {"name": "FTP", "vulnerabilities": ["Слабые учетные данные", "Передача данных в открытом виде", "Анонимный доступ"], "attacks": ["Брутфорс-атака", "Перехват трафика", "Несанкционированный доступ"], "risk": "high"},
-    22: {"name": "SSH", "vulnerabilities": ["Уязвимости в реализации SSH", "Слабые пароли", "Устаревшие версии"], "attacks": ["Брутфорс-атака", "RCE атаки", "Перехват сессий"], "risk": "medium"},
-    23: {"name": "Telnet", "vulnerabilities": ["Полное отсутствие шифрования", "Аутентификация в открытом виде"], "attacks": ["Перехват трафика", "MITM атака", "Брутфорс-атака"], "risk": "critical"},
-    25: {"name": "SMTP", "vulnerabilities": ["Неправильная конфигурация", "Ретрансляция спама"], "attacks": ["Спам-рассылки", "Фишинг", "Перебор пользователей"], "risk": "medium"},
-    53: {"name": "DNS", "vulnerabilities": ["Слабая конфигурация", "Открытый резолвер"], "attacks": ["DNS-спуфинг", "DDoS амплификация", "Отравление кэша"], "risk": "high"},
-    80: {"name": "HTTP", "vulnerabilities": ["Уязвимости веб-сервера", "Небезопасные приложения"], "attacks": ["SQL-инъекция", "XSS", "CSRF", "Path Traversal"], "risk": "medium"},
-    110: {"name": "POP3", "vulnerabilities": ["Передача данных в открытом виде"], "attacks": ["Перехват учетных данных", "Брутфорс-атака"], "risk": "high"},
-    135: {"name": "RPC", "vulnerabilities": ["Уязвимости в RPC службах"], "attacks": ["Удаленное выполнение кода", "Перечисление служб"], "risk": "high"},
-    139: {"name": "NetBIOS", "vulnerabilities": ["Уязвимости SMB", "Небезопасные настройки"], "attacks": ["Распространение ransomware", "RCE", "Перехват NTLM-хешей"], "risk": "critical"},
-    143: {"name": "IMAP", "vulnerabilities": ["Передача данных в открытом виде"], "attacks": ["Перехват писем", "Перехват учетных данных"], "risk": "high"},
-    443: {"name": "HTTPS", "vulnerabilities": ["Устаревшие SSL/TLS", "Слабые шифры"], "attacks": ["MITM атака", "Downgrade атака", "Уязвимости приложений"], "risk": "medium"},
-    445: {"name": "SMB", "vulnerabilities": ["Уязвимости реализации SMB"], "attacks": ["EternalBlue", "Удаленное выполнение кода"], "risk": "critical"},
-    1433: {"name": "MSSQL", "vulnerabilities": ["Уязвимости СУБД", "Слабые пароли sa"], "attacks": ["SQL-инъекция", "Брутфорс-атака"], "risk": "high"},
-    3306: {"name": "MySQL", "vulnerabilities": ["Уязвимости СУБД", "Стандартные учетные записи"], "attacks": ["Брутфорс-атака", "SQL-инъекция"], "risk": "high"},
-    3389: {"name": "RDP", "vulnerabilities": ["Уязвимости реализации RDP", "Слабые пароли"], "attacks": ["Брутфорс-атака", "Удаленное выполнение кода"], "risk": "critical"},
-    5432: {"name": "PostgreSQL", "vulnerabilities": ["Небезопасная конфигурация"], "attacks": ["Брутфорс-атака", "Выполнение команд"], "risk": "high"},
-    5900: {"name": "VNC", "vulnerabilities": ["Слабые пароли", "Передача данных в открытом виде"], "attacks": ["Брутфорс-атака", "Перехват сессий"], "risk": "critical"},
-    6379: {"name": "Redis", "vulnerabilities": ["Работа без аутентификации"], "attacks": ["Запись файлов (RCE)", "Несанкционированный доступ"], "risk": "critical"},
-    27017: {"name": "MongoDB", "vulnerabilities": ["Работа без аутентификации"], "attacks": ["Несанкционированный доступ", "Шифрование данных"], "risk": "high"}
+    21: {
+        "name": "FTP (File Transfer Protocol)",
+        "description": "Протокол передачи файлов",
+        "vulnerabilities": [
+            "Слабые и стандартные учетные данные", 
+            "Передача данных в открытом виде",
+            "Анонимный доступ без пароля"
+        ],
+        "attacks": [
+            "Брутфорс-атака на учетные данные",
+            "Перехват трафика (сниффинг)",
+            "Несанкционированный доступ к файлам"
+        ],
+        "risk": "high",
+        "common_software": ["vsftpd", "ProFTPD", "FileZilla Server"],
+        "recommendations": [
+            "Использовать SFTP или FTPS вместо FTP",
+            "Запретить анонимный доступ",
+            "Настроить брандмауэр для ограничения доступа",
+            "Регулярно обновлять FTP-сервер"
+        ]
+    },
+    22: {
+        "name": "SSH (Secure Shell)",
+        "description": "Защищенный удаленный доступ",
+        "vulnerabilities": [
+            "Уязвимости в реализации SSH (CVE-2025-32433)",
+            "Слабые пароли и ключи аутентификации",
+            "Устаревшие версии протокола"
+        ],
+        "attacks": [
+            "Брутфорс-атака на пароли",
+            "Атака на уязвимое ПО для RCE",
+            "Перехват сессий"
+        ],
+        "risk": "medium",
+        "common_software": ["OpenSSH", "Dropbear"],
+        "recommendations": [
+            "Использовать ключевую аутентификацию вместо паролей",
+            "Отключить root-логин",
+            "Изменить стандартный порт 22",
+            "Настроить fail2ban для защиты от брутфорса"
+        ]
+    },
+    23: {
+        "name": "Telnet",
+        "description": "Текстовый удаленный доступ",
+        "vulnerabilities": [
+            "Полное отсутствие шифрования",
+            "Аутентификация в открытом виде",
+            "Устаревший небезопасный протокол"
+        ],
+        "attacks": [
+            "Перехват трафика (сниффинг)",
+            "Атака 'человек посередине' (MITM)",
+            "Брутфорс-атака на учетные данные"
+        ],
+        "risk": "critical",
+        "common_software": ["telnetd", "inetutils-telnetd"],
+        "recommendations": [
+            "НЕМЕДЛЕННО ОТКЛЮЧИТЬ Telnet",
+            "Использовать SSH для удаленного доступа",
+            "Заблокировать порт на брандмауэре"
+        ]
+    },
+    25: {
+        "name": "SMTP (Simple Mail Transfer Protocol)",
+        "description": "Отправка электронной почты",
+        "vulnerabilities": [
+            "Неправильная конфигурация",
+            "Возможность ретрансляции спама",
+            "Отсутствие аутентификации"
+        ],
+        "attacks": [
+            "Спам-рассылки через открытый релей",
+            "Фишинг атаки",
+            "Перебор пользователей (атака на перечисление)"
+        ],
+        "risk": "medium",
+        "common_software": ["Postfix", "Sendmail", "Exim"],
+        "recommendations": [
+            "Настроить аутентификацию SMTP",
+            "Запретить открытую ретрансляцию",
+            "Использовать TLS шифрование"
+        ]
+    },
+    53: {
+        "name": "DNS (Domain Name System)",
+        "description": "Разрешение доменных имен",
+        "vulnerabilities": [
+            "Слабая конфигурация кэширующего сервера",
+            "Открытый рекурсивный резолвер",
+            "Устаревшее ПО"
+        ],
+        "attacks": [
+            "DNS-спуфинг",
+            "Амплификация DDoS атак",
+            "Отравление DNS кэша"
+        ],
+        "risk": "high",
+        "common_software": ["BIND", "dnsmasq", "Unbound"],
+        "recommendations": [
+            "Запретить рекурсивные запросы извне",
+            "Настроить DNSSEC",
+            "Обновить DNS сервер до последней версии"
+        ]
+    },
+    80: {
+        "name": "HTTP",
+        "description": "Веб-сервер",
+        "vulnerabilities": [
+            "Уязвимости в веб-сервере (Apache, Nginx)",
+            "Небезопасные веб-приложения",
+            "Устаревшие версии ПО"
+        ],
+        "attacks": [
+            "SQL-инъекция",
+            "XSS (Межсайтовый скриптинг)",
+            "CSRF (Межсайтовая подделка запроса)",
+            "Path Traversal",
+            "DoS/DDoS атаки"
+        ],
+        "risk": "medium",
+        "common_software": ["Apache", "Nginx", "IIS"],
+        "recommendations": [
+            "Обновить веб-сервер до последней версии",
+            "Настроить WAF (Web Application Firewall)",
+            "Использовать HTTPS вместо HTTP"
+        ]
+    },
+    110: {
+        "name": "POP3 (Post Office Protocol v3)",
+        "description": "Получение электронной почты",
+        "vulnerabilities": [
+            "Передача логинов и паролей в открытом виде",
+            "Устаревший протокол"
+        ],
+        "attacks": [
+            "Перехват учетных данных (сниффинг)",
+            "Брутфорс-атака на почтовые ящики"
+        ],
+        "risk": "high",
+        "common_software": ["Dovecot", "Cyrus IMAP"],
+        "recommendations": [
+            "Использовать POP3S с SSL/TLS",
+            "Перейти на более безопасный IMAP",
+            "Заблокировать порт если не используется"
+        ]
+    },
+    135: {
+        "name": "RPC (Remote Procedure Call)",
+        "description": "Удаленный вызов процедур",
+        "vulnerabilities": [
+            "Уязвимости в RPC службах",
+            "Небезопасная конфигурация"
+        ],
+        "attacks": [
+            "Удаленное выполнение кода",
+            "Перечисление служб и учетных записей"
+        ],
+        "risk": "high",
+        "common_software": ["Windows RPC", "Portmapper"],
+        "recommendations": [
+            "Заблокировать порт на брандмауэре",
+            "Отключить неиспользуемые RPC службы",
+            "Обновить операционную систему"
+        ]
+    },
+    139: {
+        "name": "NetBIOS",
+        "description": "Сетевая базовая система ввода/вывода",
+        "vulnerabilities": [
+            "Уязвимости SMB",
+            "Небезопасные настройки"
+        ],
+        "attacks": [
+            "Распространение ransomware",
+            "Удаленное выполнение кода",
+            "Перехват NTLM-хешей"
+        ],
+        "risk": "critical",
+        "common_software": ["Samba", "Windows Network"],
+        "recommendations": [
+            "ОТКЛЮЧИТЬ SMBv1",
+            "Настроить безопасную аутентификацию",
+            "Заблокировать порт если не используется"
+        ]
+    },
+    143: {
+        "name": "IMAP (Internet Message Access Protocol)",
+        "description": "Доступ к электронной почте",
+        "vulnerabilities": [
+            "Передача данных в открытом виде",
+            "Устаревшие реализации"
+        ],
+        "attacks": [
+            "Перехват писем и учетных данных",
+            "Брутфорс-атака на почтовые ящики"
+        ],
+        "risk": "high",
+        "common_software": ["Dovecot", "Cyrus IMAP"],
+        "recommendations": [
+            "Использовать IMAPS с SSL/TLS",
+            "Настроить двухфакторную аутентификацию",
+            "Обновить почтовый сервер"
+        ]
+    },
+    443: {
+        "name": "HTTPS",
+        "description": "Защищенный веб-сервер",
+        "vulnerabilities": [
+            "Устаревшие или уязвимые версии SSL/TLS",
+            "Слабые шифры и сертификаты",
+            "Уязвимости в веб-приложениях"
+        ],
+        "attacks": [
+            "Атака 'человек посередине' (MITM)",
+            "Downgrade-атака (POODLE, BEAST)",
+            "Те же атаки что и на порт 80"
+        ],
+        "risk": "medium",
+        "common_software": ["Apache", "Nginx", "IIS"],
+        "recommendations": [
+            "Обновить SSL/TLS конфигурацию",
+            "Использовать современные шифры",
+            "Регулярно обновлять сертификаты"
+        ]
+    },
+    445: {
+        "name": "SMB (Server Message Block)",
+        "description": "Общий доступ к файлам и принтерам",
+        "vulnerabilities": [
+            "Уязвимости реализации SMB (EternalBlue)",
+            "Небезопасные настройки общего доступа"
+        ],
+        "attacks": [
+            "Удаленное выполнение кода",
+            "Распространение malware",
+            "Несанкционированный доступ к данным"
+        ],
+        "risk": "critical",
+        "common_software": ["Samba", "Windows SMB"],
+        "recommendations": [
+            "ОТКЛЮЧИТЬ SMB если не используется",
+            "Обновить систему и SMB реализацию",
+            "Настроить строгую аутентификацию"
+        ]
+    },
+    1433: {
+        "name": "MSSQL",
+        "description": "Microsoft SQL Server",
+        "vulnerabilities": [
+            "Уязвимости в СУБД",
+            "Слабые пароли sa",
+            "Небезопасная конфигурация"
+        ],
+        "attacks": [
+            "SQL-инъекция",
+            "Брутфорс-атака на учетные записи",
+            "Подъем привилегий"
+        ],
+        "risk": "high",
+        "common_software": ["Microsoft SQL Server"],
+        "recommendations": [
+            "Изменить пароль по умолчанию sa",
+            "Настроить брандмауэр для ограничения доступа",
+            "Регулярно обновлять СУБД"
+        ]
+    },
+    3306: {
+        "name": "MySQL",
+        "description": "MySQL Database Server",
+        "vulnerabilities": [
+            "Уязвимости в СУБД",
+            "Стандартные учетные записи",
+            "Небезопасная конфигурация"
+        ],
+        "attacks": [
+            "Брутфорс-атака",
+            "SQL-инъекция",
+            "Несанкционированный доступ к данным"
+        ],
+        "risk": "high",
+        "common_software": ["MySQL", "MariaDB"],
+        "recommendations": [
+            "Удалить тестовые базы и учетные записи",
+            "Настроить пароли для всех пользователей",
+            "Ограничить доступ по IP адресам"
+        ]
+    },
+    3389: {
+        "name": "RDP (Remote Desktop Protocol)",
+        "description": "Удаленный рабочий стол",
+        "vulnerabilities": [
+            "Уязвимости реализации RDP (BlueKeep)",
+            "Слабые пароли",
+            "Открытый доступ из интернета"
+        ],
+        "attacks": [
+            "Брутфорс-атака на учетные записи",
+            "Удаленное выполнение кода",
+            "Несанкционированный доступ к системе"
+        ],
+        "risk": "critical",
+        "common_software": ["Windows Remote Desktop", "xrdp"],
+        "recommendations": [
+            "НИКОГДА не открывать RDP в интернет",
+            "Использовать VPN для доступа",
+            "Настроить Network Level Authentication",
+            "Изменить стандартный порт"
+        ]
+    },
+    5432: {
+        "name": "PostgreSQL",
+        "description": "PostgreSQL Database Server",
+        "vulnerabilities": [
+            "Небезопасная конфигурация по умолчанию",
+            "Слабые пароли",
+            "Уязвимости в СУБД"
+        ],
+        "attacks": [
+            "Брутфорс-атака",
+            "Выполнение произвольных SQL команд",
+            "Несанкционированный доступ к данным"
+        ],
+        "risk": "high",
+        "common_software": ["PostgreSQL"],
+        "recommendations": [
+            "Настроить пароли для всех пользователей",
+            "Ограничить доступ по IP адресам",
+            "Регулярно обновлять СУБД"
+        ]
+    },
+    5900: {
+        "name": "VNC (Virtual Network Computing)",
+        "description": "Удаленный графический доступ",
+        "vulnerabilities": [
+            "Слабые пароли",
+            "Передача данных в открытом виде",
+            "Устаревшие версии"
+        ],
+        "attacks": [
+            "Брутфорс-атака на пароли",
+            "Перехват трафика (сессий)",
+            "Несанкционированный доступ к системе"
+        ],
+        "risk": "critical",
+        "common_software": ["RealVNC", "TightVNC", "UltraVNC"],
+        "recommendations": [
+            "Использовать SSH туннелирование для VNC",
+            "Настроить сложные пароли",
+            "Заблокировать порт если не используется"
+        ]
+    },
+    6379: {
+        "name": "Redis",
+        "description": "In-memory data structure store",
+        "vulnerabilities": [
+            "Часто работает без аутентификации",
+            "Небезопасная конфигурация по умолчанию"
+        ],
+        "attacks": [
+            "Запись произвольных файлов (RCE)",
+            "Несанкционированный доступ к данным",
+            "Использование в ботнетах"
+        ],
+        "risk": "critical",
+        "common_software": ["Redis"],
+        "recommendations": [
+            "НАСТРОИТЬ аутентификацию в Redis",
+            "Заблокировать доступ из интернета",
+            "Обновить до последней версии"
+        ]
+    },
+    27017: {
+        "name": "MongoDB",
+        "description": "NoSQL database",
+        "vulnerabilities": [
+            "Часто работает без аутентификации",
+            "Небезопасная конфигурация по умолчанию"
+        ],
+        "attacks": [
+            "Несанкционированный доступ к данным",
+            "Шифрование данных с требованием выкупа",
+            "Кража конфиденциальной информации"
+        ],
+        "risk": "high",
+        "common_software": ["MongoDB"],
+        "recommendations": [
+            "НАСТРОИТЬ аутентификацию в MongoDB",
+            "Заблокировать доступ из интернета",
+            "Настроить шифрование данных"
+        ]
+    }
 }
-
-def format_results(data):
-    """Красивое форматирование результатов анализа"""
-    formatted = {}
-    
-    if 'whois' in data:
-        formatted['whois'] = format_whois(data['whois'])
-    
-    if 'ip_info' in data:
-        formatted['ip_info'] = format_ip_info(data['ip_info'])
-    
-    if 'dns_records' in data:
-        formatted['dns_records'] = format_dns_records(data['dns_records'])
-    
-    if 'ssl_certificate' in data:
-        formatted['ssl_certificate'] = format_ssl_info(data['ssl_certificate'])
-    
-    if 'virustotal' in data:
-        formatted['virustotal'] = format_virustotal(data['virustotal'])
-    
-    if 'metrics' in data:
-        formatted['metrics'] = format_metrics(data['metrics'])
-    
-    if 'security_scan' in data:
-        formatted['security_scan'] = format_security_scan(data['security_scan'])
-    
-    return formatted
-
-def format_whois(whois_data):
-    """Форматирование WHOIS информации"""
-    if 'error' in whois_data:
-        return whois_data
-    
-    formatted = {}
-    important_fields = ['domain_name', 'registrar', 'creation_date', 
-                       'expiration_date', 'updated_date', 'name_servers',
-                       'status', 'emails', 'org', 'country']
-    
-    for field in important_fields:
-        if field in whois_data:
-            formatted[field] = whois_data[field]
-    
-    return formatted if formatted else whois_data
-
-def format_ip_info(ip_data):
-    """Форматирование IP информации"""
-    if 'error' in ip_data:
-        return ip_data
-    
-    formatted = {
-        "ip_address": ip_data.get('ip_address', 'N/A'),
-        "hostname": ip_data.get('hostname', 'N/A'),
-        "geolocation": ip_data.get('geolocation', {}),
-        "open_ports": format_open_ports(ip_data.get('open_ports', {}))
-    }
-    
-    return formatted
-
-def format_open_ports(ports_data):
-    """Форматирование информации об открытых портах"""
-    formatted = {}
-    for port, info in ports_data.items():
-        formatted[port] = {
-            "service": info.get('service', 'Unknown'),
-            "status": info.get('status', 'unknown'),
-            "risk_level": info.get('risk_level', 'unknown'),
-            "vulnerabilities": info.get('vulnerabilities', []),
-            "recommendations": info.get('recommendations', [])
-        }
-    return formatted
-
-def format_dns_records(dns_data):
-    """Форматирование DNS записей"""
-    if 'error' in dns_data:
-        return dns_data
-    
-    formatted = {}
-    for record_type, records in dns_data.items():
-        if record_type not in ['error', 'info']:
-            formatted[record_type] = records
-    
-    return formatted if formatted else dns_data
-
-def format_ssl_info(ssl_data):
-    """Форматирование SSL информации"""
-    if 'error' in ssl_data:
-        return ssl_data
-    
-    formatted = {
-        "issuer": ssl_data.get('issuer', {}),
-        "subject": ssl_data.get('subject', {}),
-        "valid_from": ssl_data.get('valid_from', 'N/A'),
-        "valid_until": ssl_data.get('valid_until', 'N/A'),
-        "san": ssl_data.get('san', []),
-        "signature_algorithm": ssl_data.get('signature_algorithm', 'N/A')
-    }
-    
-    return formatted
-
-def format_virustotal(vt_data):
-    """Форматирование VirusTotal результатов"""
-    if 'error' in vt_data or 'warning' in vt_data:
-        return vt_data
-    
-    formatted = {
-        "reputation": vt_data.get('reputation', 'N/A'),
-        "last_analysis_stats": vt_data.get('stats', {}),
-        "categories": vt_data.get('categories', {}),
-        "last_analysis_date": format_timestamp(vt_data.get('last_analysis_date', 'N/A'))
-    }
-    
-    return formatted
-
-def format_metrics(metrics_data):
-    """Форматирование метрик сайта"""
-    if 'error' in metrics_data:
-        return metrics_data
-    
-    return {
-        "Время загрузки": metrics_data.get('load_time', 'N/A'),
-        "Количество слов": metrics_data.get('word_count', 'N/A'),
-        "Количество символов": metrics_data.get('char_count', 'N/A'),
-        "Размер страницы": metrics_data.get('page_size', 'N/A'),
-        "Кодировка": metrics_data.get('encoding', 'N/A')
-    }
-
-def format_security_scan(security_data):
-    """Форматирование результатов проверки безопасности"""
-    if 'error' in security_data:
-        return security_data
-    
-    formatted = {
-        "target_ip": security_data.get('target_ip', 'N/A'),
-        "target_domain": security_data.get('target_domain', 'N/A'),
-        "geolocation": security_data.get('geolocation', {}),
-        "open_ports": format_open_ports(security_data.get('open_ports', {})),
-        "ssl_security": format_ssl_info(security_data.get('ssl_security', {})),
-        "security_analysis": security_data.get('security_analysis', {}),
-        "scan_timestamp": security_data.get('scan_timestamp', 'N/A')
-    }
-    
-    if 'virustotal' in security_data:
-        formatted['virustotal'] = format_virustotal(security_data['virustotal'])
-    
-    return formatted
-
-def format_timestamp(timestamp):
-    """Форматирование временных меток"""
-    if isinstance(timestamp, (int, float)):
-        try:
-            return datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
-        except:
-            return str(timestamp)
-    return timestamp
 
 # Валидация URL
 def validate_url(url):
@@ -310,43 +531,28 @@ def scan_ports(ip, ports_to_scan=None):
                 if result == 0:
                     port_info = PORT_VULNERABILITIES.get(port, {
                         "name": "Unknown",
+                        "description": "Unknown service",
                         "vulnerabilities": ["Неизвестная служба"],
                         "attacks": ["Рекомендуется исследование"],
-                        "risk": "unknown"
+                        "risk": "unknown",
+                        "common_software": [],
+                        "recommendations": ["Исследовать назначение порта"]
                     })
                     
                     open_ports[port] = {
                         "status": "open",
                         "service": port_info["name"],
+                        "description": port_info["description"],
                         "risk_level": port_info["risk"],
                         "vulnerabilities": port_info["vulnerabilities"],
                         "possible_attacks": port_info["attacks"],
-                        "recommendations": generate_recommendations(port, port_info["risk"])
+                        "common_software": port_info["common_software"],
+                        "recommendations": port_info["recommendations"]
                     }
         except:
             continue
     
     return open_ports
-
-def generate_recommendations(port, risk_level):
-    recommendations = []
-    
-    if risk_level == "critical":
-        recommendations.append("НЕМЕДЛЕННО ЗАКРОЙТЕ порт")
-        recommendations.append("Используйте VPN вместо открытого порта")
-    elif risk_level == "high":
-        recommendations.append("Рекомендуется закрыть порт")
-        recommendations.append("Обновите ПО до последней версии")
-    elif risk_level == "medium":
-        recommendations.append("Настройте корректную аутентификацию")
-        recommendations.append("Ограничьте доступ по IP адресам")
-    
-    if port in [21, 22, 23, 110, 143, 5900]:
-        recommendations.append("Используйте SSH туннелирование или VPN")
-    if port in [3389, 5900]:
-        recommendations.append("Рассмотрите альтернативы для удаленного доступа")
-    
-    return recommendations
 
 def get_geo_info(ip):
     try:
@@ -577,11 +783,10 @@ def get_dns_records(domain):
         
         for record_type in record_types:
             try:
-                # ИСПОЛЬЗУЕМ dns_resolver вместо dns.resolver
-                answers = dns_resolver.resolve(domain, record_type, raise_on_no_answer=False)
+                answers = dns.resolver.resolve(domain, record_type, raise_on_no_answer=False)
                 if answers.rrset:
                     records[record_type] = [str(r) for r in answers]
-            except (dns_resolver.NoAnswer, dns_resolver.NXDOMAIN, dns_resolver.NoNameservers):
+            except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.resolver.NoNameservers):
                 continue
             except Exception as e:
                 records[record_type] = f"Ошибка: {str(e)}"
@@ -589,7 +794,7 @@ def get_dns_records(domain):
         return records if records else {"info": "DNS записи не найдены"}
     except Exception as e:
         return {"error": f"Ошибка DNS: {str(e)}"}
-        
+
 def get_ip_neighbors(domain):
     try:
         ip = socket.gethostbyname(domain)
@@ -673,7 +878,7 @@ def security_scan(domain):
             "open_ports": open_ports,
             "geolocation": geo_info,
             "ssl_security": ssl_info,
-            "virustotal": vt_info,  # Добавили VirusTotal
+            "virustotal": vt_info,
             "security_analysis": security_analysis,
             "scan_timestamp": datetime.now().isoformat()
         }
@@ -768,10 +973,7 @@ def quick_scan():
                 'metrics': metrics_future.result(timeout=TIMEOUT)
             }
         
-        # Форматируем результаты
-        formatted_results = format_results(results)
-        return jsonify(formatted_results)
-        
+        return jsonify(results)
     except concurrent.futures.TimeoutError:
         return jsonify({'error': 'Таймаут при выполнении анализа'}), 408
     except Exception as e:
@@ -832,7 +1034,6 @@ def virustotal():
         return jsonify({'error': f'Ошибка VirusTotal: {str(e)}'}), 500
 
 @app.route('/api/dns', methods=['GET'])
-@app.route('/api/dns', methods=['GET'])
 def dns():
     url = request.args.get('url')
     is_valid, message = validate_url(url)
@@ -841,9 +1042,7 @@ def dns():
     
     try:
         domain = extract_domain(url)
-        dns_data = safe_api_call(get_dns_records, domain)
-        formatted_dns = format_dns_records(dns_data)
-        return jsonify({'dns_records': formatted_dns})
+        return jsonify({'dns_records': safe_api_call(get_dns_records, domain)})
     except Exception as e:
         return jsonify({'error': f'Ошибка DNS: {str(e)}'}), 500
 
